@@ -1,7 +1,3 @@
-Content is user-generated and unverified.
-
-
-Learn about artifacts
 import { useState, useEffect, useCallback } from 'react';
 import {
   Zap, Lock, Phone, MapPin, Users, Wallet, Home as HomeIcon,
