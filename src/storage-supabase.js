@@ -1,96 +1,81 @@
-// storage-supabase.js
-//
-// بديل حقيقي لملف storage-polyfill.js — يخزن البيانات على Supabase
-// (قاعدة بيانات Postgres سحابية، مجانية بدون بطاقة بنكية) بدل
-// localStorage المحلي، بحيث كل الأجهزة (صاحب المولد والمدير) يشوفون
-// نفس البيانات لحظياً.
-//
-// App.jsx ما يتغيّر أبداً — يستمر يتعامل بس مع window.storage.get/set/delete/list
-// (نفس الواجهة القديمة بالضبط).
-
 import { createClient } from '@supabase/supabase-js';
 
-// إعدادات مشروعك بـ Supabase (من Supabase Dashboard → Settings → API)
 const SUPABASE_URL = 'https://qrhvxjebrxbnklfuoidu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_vKIcnR7YugTJ0e3Eb-hehA_zoKEwFUl';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// نخزن كل شي بجدول وحد اسمه amper_storage
-// كل صف فيه: id (key + shared)، key، value، shared
 const TABLE_NAME = 'amper_storage';
 
 function rowId(key, shared) {
-  return ${shared ? 'shared' : 'local'}__${key};
+  var prefix = shared ? 'shared' : 'local';
+  return prefix + '__' + key;
 }
 
 window.storage = {
-  async get(key, shared = false) {
+  async get(key, shared) {
+    shared = !!shared;
     try {
-      const { data, error } = await supabase
+      const result = await supabase
         .from(TABLE_NAME)
         .select('value')
         .eq('id', rowId(key, shared))
         .maybeSingle();
-
-      if (error) throw error;
-      if (!data) return null;
-      return { key, value: data.value, shared: !!shared };
+      if (result.error) throw result.error;
+      if (!result.data) return null;
+      return { key: key, value: result.data.value, shared: shared };
     } catch (e) {
       console.error('storage.get failed', e);
       return null;
     }
   },
-
-  async set(key, value, shared = false) {
+  async set(key, value, shared) {
+    shared = !!shared;
     try {
-      const { error } = await supabase.from(TABLE_NAME).upsert({
+      const result = await supabase.from(TABLE_NAME).upsert({
         id: rowId(key, shared),
-        key,
-        value,
-        shared: !!shared,
+        key: key,
+        value: value,
+        shared: shared
       });
-      if (error) throw error;
-      return { key, value, shared: !!shared };
+      if (result.error) throw result.error;
+      return { key: key, value: value, shared: shared };
     } catch (e) {
       console.error('storage.set failed', e);
       return null;
     }
   },
-
-  async delete(key, shared = false) {
+  async delete(key, shared) {
+    shared = !!shared;
     try {
-      const { error } = await supabase
+      const result = await supabase
         .from(TABLE_NAME)
         .delete()
         .eq('id', rowId(key, shared));
-      if (error) throw error;
-      return { key, deleted: true, shared: !!shared };
+      if (result.error) throw result.error;
+      return { key: key, deleted: true, shared: shared };
     } catch (e) {
       console.error('storage.delete failed', e);
       return null;
     }
   },
-
-  async list(prefix = '', shared = false) {
+  async list(prefix, shared) {
+    prefix = prefix || '';
+    shared = !!shared;
     try {
       let query = supabase
         .from(TABLE_NAME)
         .select('key')
-        .eq('shared', !!shared);
-
+        .eq('shared', shared);
       if (prefix) {
-        query = query.like('key', ${prefix}%);
+        query = query.like('key', prefix + '%');
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const keys = (data || []).map((row) => row.key);
-      return { keys, prefix, shared: !!shared };
+      const result = await query;
+      if (result.error) throw result.error;
+      const keys = (result.data || []).map(function (row) { return row.key; });
+      return { keys: keys, prefix: prefix, shared: shared };
     } catch (e) {
       console.error('storage.list failed', e);
       return null;
     }
-  },
+  }
 };
